@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiError, authenticate, readJson } from "@/lib/api";
+import { apiError, authenticate, readJson, withBackendErrors } from "@/lib/api";
 import { isStripeConfigured } from "@/lib/env.server";
 import { publicEnv } from "@/lib/env";
 import { getStripe, priceIdForPlan } from "@/lib/billing/stripe";
@@ -8,10 +8,11 @@ import { getEntitlements } from "@/lib/billing/entitlements";
 import { getOrCreateStripeCustomer } from "@/lib/billing/customer";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { PAID_PLAN_IDS } from "@/lib/config/plans";
+import { BackendError } from "@/lib/backend-errors";
 
 const bodySchema = z.object({ plan: z.enum(PAID_PLAN_IDS) });
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
   const { user } = auth;
@@ -61,7 +62,10 @@ export async function POST(request: Request) {
     if (!session.url) return apiError(502, "stripe_error", "Could not start checkout.");
     return NextResponse.json({ url: session.url });
   } catch (error) {
+    if (error instanceof BackendError) throw error;
     console.error("[stripe] checkout failed", error instanceof Error ? error.message : error);
     return apiError(502, "stripe_error", "Could not start checkout. Please try again.");
   }
 }
+
+export const POST = withBackendErrors(handlePOST);

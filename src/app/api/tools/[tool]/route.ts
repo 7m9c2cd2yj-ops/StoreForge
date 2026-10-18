@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { apiError, authenticate, readJson } from "@/lib/api";
+import { apiError, authenticate, readJson, withBackendErrors } from "@/lib/api";
 import { isToolId, TOOL_INPUT_SCHEMAS } from "@/lib/ai/tool-definitions";
 import { isAIConfigured } from "@/lib/env.server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -10,7 +10,7 @@ import { AIError, aiErrorStatus } from "@/lib/ai/errors";
 
 export const maxDuration = 120;
 
-export async function POST(request: Request, ctx: RouteContext<"/api/tools/[tool]">) {
+async function handlePOST(request: Request, ctx: RouteContext<"/api/tools/[tool]">) {
   const { tool } = await ctx.params;
   if (!isToolId(tool)) return apiError(404, "not_found", "Unknown tool.");
 
@@ -58,3 +58,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/tools/[tool
     return apiError(500, "server_error", "Something went wrong. Your credit was refunded.");
   }
 }
+
+export const POST = withBackendErrors(handlePOST);

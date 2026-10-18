@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiError, authenticate, readJson } from "@/lib/api";
+import { apiError, authenticate, readJson, withBackendErrors } from "@/lib/api";
 import { storeInputSchema } from "@/lib/validation/store-input";
 import { isAIConfigured } from "@/lib/env.server";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -11,6 +11,7 @@ import { generateStoreBlueprint } from "@/lib/ai/store-generator";
 import { AIError, aiErrorStatus } from "@/lib/ai/errors";
 import type { Json } from "@/lib/database.types";
 import { isStaleGeneration } from "@/lib/projects";
+import { throwDbError } from "@/lib/backend-errors";
 
 // Long-running: store generations can take a few minutes.
 export const maxDuration = 300;
@@ -21,7 +22,7 @@ const requestSchema = z.object({
   projectId: z.uuid().optional(),
 });
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
   const { user } = auth;
@@ -46,23 +47,26 @@ export async function POST(request: Request) {
 
   // Either retry an existing project of this user, or check the project limit.
   if (projectId) {
-    const { data: existing } = await admin
+    const { data: existing, error: existingError } = await admin
       .from("projects")
       .select("id, status, updated_at")
       .eq("id", projectId)
       .eq("owner_id", user.id)
       .maybeSingle();
+    if (existingError) throwDbError("load project", existingError);
     if (!existing) return apiError(404, "not_found", "Project not found.");
     const retryable = existing.status === "failed" || isStaleGeneration(existing.status, existing.updated_at);
     if (!retryable) {
       return apiError(409, "not_retryable", "This project is not in a state that can be regenerated.");
     }
   } else {
+    // GET + limit(1) rather than HEAD, so errors carry a body we can classify.
     const { count, error } = await admin
       .from("projects")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", user.id);
-    if (error) return apiError(500, "server_error", "Could not check your projects. Please try again.");
+      .select("id", { count: "exact" })
+      .eq("owner_id", user.id)
+      .limit(1);
+    if (error) throwDbError("count projects", error);
     if ((count ?? 0) >= plan.limits.projects) {
       return apiError(
         403,
@@ -170,3 +174,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withBackendErrors(handlePOST);

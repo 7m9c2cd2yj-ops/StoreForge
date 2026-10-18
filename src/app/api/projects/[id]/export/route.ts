@@ -1,4 +1,4 @@
-import { apiError, authenticate } from "@/lib/api";
+import { apiError, authenticate, withBackendErrors } from "@/lib/api";
 import { createClient } from "@/lib/supabase/server";
 import { getEntitlements } from "@/lib/billing/entitlements";
 import { parseProductSeo, parseStoredChecklist, parseStoredContent } from "@/lib/blueprint";
@@ -9,7 +9,7 @@ import { getPublisher } from "@/lib/shopify";
 const FORMATS = ["csv", "shopify", "markdown", "json"] as const;
 type Format = (typeof FORMATS)[number];
 
-export async function GET(request: Request, ctx: RouteContext<"/api/projects/[id]/export">) {
+async function handleGET(request: Request, ctx: RouteContext<"/api/projects/[id]/export">) {
   const auth = await authenticate();
   if ("response" in auth) return auth.response;
 
@@ -96,3 +96,5 @@ export async function GET(request: Request, ctx: RouteContext<"/api/projects/[id
     },
   });
 }
+
+export const GET = withBackendErrors(handleGET);

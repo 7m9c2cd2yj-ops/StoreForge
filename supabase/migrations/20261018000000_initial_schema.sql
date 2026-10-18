@@ -1,5 +1,8 @@
 -- StoreForge AI — initial schema
 --
+-- Idempotent: safe to run more than once (e.g. pasted into the Supabase SQL
+-- Editor again after a partial run).
+--
 -- Security model
 --   * Row Level Security is enabled on every table.
 --   * `anon` has no access to any table.
@@ -31,14 +34,14 @@ $$;
 -- Profiles
 -- ---------------------------------------------------------------------------
 
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text check (display_name is null or char_length(display_name) <= 80),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create trigger profiles_set_updated_at
+create or replace trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
 
@@ -60,7 +63,7 @@ begin
 end;
 $$;
 
-create trigger on_auth_user_created
+create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
@@ -68,7 +71,7 @@ create trigger on_auth_user_created
 -- Projects
 -- ---------------------------------------------------------------------------
 
-create table public.projects (
+create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users (id) on delete cascade,
   store_name text not null check (char_length(store_name) between 1 and 120),
@@ -87,9 +90,9 @@ create table public.projects (
   constraint projects_content_size check (content is null or pg_column_size(content) < 512000)
 );
 
-create index projects_owner_created_idx on public.projects (owner_id, created_at desc);
+create index if not exists projects_owner_created_idx on public.projects (owner_id, created_at desc);
 
-create trigger projects_set_updated_at
+create or replace trigger projects_set_updated_at
   before update on public.projects
   for each row execute function public.set_updated_at();
 
@@ -97,7 +100,7 @@ create trigger projects_set_updated_at
 -- Products
 -- ---------------------------------------------------------------------------
 
-create table public.products (
+create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects (id) on delete cascade,
   owner_id uuid not null references auth.users (id) on delete cascade,
@@ -111,10 +114,10 @@ create table public.products (
   updated_at timestamptz not null default now()
 );
 
-create index products_project_position_idx on public.products (project_id, position);
-create index products_owner_idx on public.products (owner_id);
+create index if not exists products_project_position_idx on public.products (project_id, position);
+create index if not exists products_owner_idx on public.products (owner_id);
 
-create trigger products_set_updated_at
+create or replace trigger products_set_updated_at
   before update on public.products
   for each row execute function public.set_updated_at();
 
@@ -146,7 +149,7 @@ begin
 end;
 $$;
 
-create trigger products_enforce_rules
+create or replace trigger products_enforce_rules
   before insert or update on public.products
   for each row execute function public.enforce_product_rules();
 
@@ -154,7 +157,7 @@ create trigger products_enforce_rules
 -- Subscriptions (server-managed, synced from Stripe webhooks)
 -- ---------------------------------------------------------------------------
 
-create table public.subscriptions (
+create table if not exists public.subscriptions (
   user_id uuid primary key references auth.users (id) on delete cascade,
   stripe_customer_id text unique,
   stripe_subscription_id text unique,
@@ -168,12 +171,12 @@ create table public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
-create trigger subscriptions_set_updated_at
+create or replace trigger subscriptions_set_updated_at
   before update on public.subscriptions
   for each row execute function public.set_updated_at();
 
 -- Processed Stripe webhook events, for idempotency.
-create table public.stripe_events (
+create table if not exists public.stripe_events (
   id text primary key,
   type text not null,
   processed_at timestamptz not null default now()
@@ -183,7 +186,7 @@ create table public.stripe_events (
 -- Usage ledger (server-managed)
 -- ---------------------------------------------------------------------------
 
-create table public.usage_events (
+create table if not exists public.usage_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   usage_type text not null check (usage_type in ('store_generation', 'ai_tool')),
@@ -197,10 +200,10 @@ create table public.usage_events (
   constraint usage_period_valid check (period_end > period_start)
 );
 
-create index usage_events_user_period_idx
+create index if not exists usage_events_user_period_idx
   on public.usage_events (user_id, usage_type, period_start);
 
-create trigger usage_events_set_updated_at
+create or replace trigger usage_events_set_updated_at
   before update on public.usage_events
   for each row execute function public.set_updated_at();
 
@@ -278,7 +281,7 @@ $$;
 -- Rate limiting (fixed window, server-managed)
 -- ---------------------------------------------------------------------------
 
-create table public.rate_limits (
+create table if not exists public.rate_limits (
   key text not null,
   window_start timestamptz not null,
   count integer not null default 0,
@@ -330,34 +333,41 @@ alter table public.usage_events enable row level security;
 alter table public.rate_limits enable row level security;
 
 -- Profiles
+drop policy if exists "Users can read their own profile" on public.profiles;
 create policy "Users can read their own profile"
   on public.profiles for select to authenticated
   using ((select auth.uid()) = id);
 
+drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile"
   on public.profiles for update to authenticated
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
 
 -- Projects (creation happens server-side so plan limits are enforced)
+drop policy if exists "Users can read their own projects" on public.projects;
 create policy "Users can read their own projects"
   on public.projects for select to authenticated
   using ((select auth.uid()) = owner_id);
 
+drop policy if exists "Users can update their own projects" on public.projects;
 create policy "Users can update their own projects"
   on public.projects for update to authenticated
   using ((select auth.uid()) = owner_id)
   with check ((select auth.uid()) = owner_id);
 
+drop policy if exists "Users can delete their own projects" on public.projects;
 create policy "Users can delete their own projects"
   on public.projects for delete to authenticated
   using ((select auth.uid()) = owner_id);
 
 -- Products
+drop policy if exists "Users can read their own products" on public.products;
 create policy "Users can read their own products"
   on public.products for select to authenticated
   using ((select auth.uid()) = owner_id);
 
+drop policy if exists "Users can add products to their own projects" on public.products;
 create policy "Users can add products to their own projects"
   on public.products for insert to authenticated
   with check (
@@ -368,20 +378,24 @@ create policy "Users can add products to their own projects"
     )
   );
 
+drop policy if exists "Users can update their own products" on public.products;
 create policy "Users can update their own products"
   on public.products for update to authenticated
   using ((select auth.uid()) = owner_id)
   with check ((select auth.uid()) = owner_id);
 
+drop policy if exists "Users can delete their own products" on public.products;
 create policy "Users can delete their own products"
   on public.products for delete to authenticated
   using ((select auth.uid()) = owner_id);
 
 -- Subscriptions & usage: read-only for the owner
+drop policy if exists "Users can read their own subscription" on public.subscriptions;
 create policy "Users can read their own subscription"
   on public.subscriptions for select to authenticated
   using ((select auth.uid()) = user_id);
 
+drop policy if exists "Users can read their own usage" on public.usage_events;
 create policy "Users can read their own usage"
   on public.usage_events for select to authenticated
   using ((select auth.uid()) = user_id);

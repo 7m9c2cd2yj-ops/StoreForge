@@ -113,7 +113,7 @@ npm run dev        # http://localhost:3000
 | `npm run lint` | ESLint |
 | `npm run typecheck` | Route type generation + `tsc --noEmit` |
 | `npm test` | Vitest unit and route tests (no external services needed) |
-| `npm run test:db` | Applies the migration to a throwaway PostgreSQL database and runs RLS, credit and concurrency tests. Needs `psql` and a local Postgres: `PGHOST=/tmp PGPORT=5432 PGUSER=postgres npm run test:db` |
+| `npm run test:db` | Applies the migration (twice, to prove it's re-runnable) to a throwaway PostgreSQL database and runs RLS, credit and concurrency tests. Needs `psql` and a local Postgres: `PGHOST=/tmp PGPORT=5432 PGUSER=postgres npm run test:db` |
 
 ## Security model
 
@@ -168,6 +168,14 @@ Current version: export-based. The **Shopify product CSV** uses Shopify's produc
 
 - `npm test`: 70 tests covering schemas and normalisation, CSV/Shopify/Markdown exports, plan resolution, usage periods, input validation, the Claude client (request shape, refusal/truncation/invalid JSON/rate-limit handling, all with the SDK mocked), the generation route (auth, validation, rate limits, project limits, 402 on exhausted credits, consume on success, refund on every failure path), and the Stripe webhook (missing/forged/tampered signatures, event handling, duplicates, retry on failure).
 - `npm run test:db`: migration, RLS isolation between users, column-level grants, anon lockout, credit limits/refunds/period rollover, rate limiting, cascade deletes, and concurrent double-spend protection.
+
+## Troubleshooting
+
+- **Open `/api/health` on your deployment.** It reports (without revealing any keys) whether Supabase is configured, whether the database tables and functions exist, and whether AI and Stripe are configured.
+- **"Your database isn't set up yet"** on the dashboard: run the migration. The screen has a *Copy database setup SQL* button; paste it into Supabase → SQL Editor → Run. The script is idempotent, so running it again is safe.
+- **"Supabase rejected the server key" / "The server key is the public key"**: set `SUPABASE_SERVICE_ROLE_KEY` to the project's `service_role` / secret key (not the anon/publishable key), then redeploy.
+- **"The server can't reach Supabase"**: free Supabase projects pause when inactive; restore the project in the Supabase dashboard.
+- After changing any `NEXT_PUBLIC_*` variable in Vercel, **redeploy**: these values are baked in at build time.
 
 ## Known limitations
 

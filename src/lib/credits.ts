@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Plan } from "@/lib/config/plans";
 import type { Json, UsageType } from "@/lib/database.types";
 import { currentUsagePeriod } from "@/lib/usage-period";
+import { throwDbError } from "@/lib/backend-errors";
 
 export { currentUsagePeriod };
 
@@ -40,7 +41,7 @@ export async function reserveCredits(
     p_metadata: metadata,
   });
 
-  if (error) throw new Error("Could not reserve credits");
+  if (error) throwDbError("reserve credits", error);
   if (!data) return { ok: false, reason: "limit_reached", limit };
   return { ok: true, reservationId: data };
 }
@@ -74,7 +75,7 @@ export async function getUsageSummary(userId: string, plan: Plan): Promise<Usage
     .eq("period_start", period.start.toISOString())
     .neq("status", "refunded");
 
-  if (error) throw new Error("Could not load usage");
+  if (error) throwDbError("load usage", error);
 
   const used = { store_generation: 0, ai_tool: 0 };
   for (const row of data ?? []) used[row.usage_type] += row.credits;

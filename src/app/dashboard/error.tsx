@@ -3,7 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function DashboardError({ reset }: { error: Error; reset: () => void }) {
+export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <div className="mx-auto max-w-md py-16 text-center">
       <AlertTriangle className="mx-auto size-8 text-warning" aria-hidden />
@@ -11,9 +11,13 @@ export default function DashboardError({ reset }: { error: Error; reset: () => v
       <p className="mt-2 text-sm text-fg-muted">
         We couldn&apos;t load this page. Your data is safe — please try again.
       </p>
-      <Button className="mt-6" onClick={reset}>
-        Try again
-      </Button>
+      <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+        <Button onClick={reset}>Try again</Button>
+        <Button asChild variant="secondary">
+          <a href="/api/health">Setup status</a>
+        </Button>
+      </div>
+      {error.digest && <p className="mt-6 font-mono text-xs text-fg-subtle">Error {error.digest}</p>}
     </div>
   );
 }

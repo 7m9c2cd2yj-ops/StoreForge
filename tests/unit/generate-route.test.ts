@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   refund: vi.fn(),
   generate: vi.fn(),
   writes: [] as { table: string; op: string; payload?: unknown }[],
+  dbError: null as null | { code: string; message: string },
 }));
 
 vi.mock("@/lib/api", async (orig) => ({
@@ -46,8 +47,11 @@ vi.mock("@/lib/supabase/admin", () => ({
         op: "select",
         payload: undefined as unknown,
         result: { error: null } as Record<string, unknown>,
-        select(_cols?: string, opts?: { head?: boolean }) {
-          if (opts?.head) builder.result = { count: mocks.projectCount, error: null };
+        select(_cols?: string, opts?: { count?: string }) {
+          if (opts?.count) builder.result = { count: mocks.projectCount, error: mocks.dbError };
+          return builder;
+        },
+        limit() {
           return builder;
         },
         insert(payload: unknown) {
@@ -82,6 +86,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 const { POST } = await import("@/app/api/generate/route");
 const { AIError } = await import("@/lib/ai/errors");
+const { BackendError } = await import("@/lib/backend-errors");
 
 const validBody = { input: { businessIdea: "Hand-poured soy candles for design-minded renters" } };
 const call = (body: unknown) =>
@@ -93,6 +98,7 @@ beforeEach(() => {
   mocks.plan = "free";
   mocks.projectCount = 0;
   mocks.writes = [];
+  mocks.dbError = null;
   mocks.reserve.mockReset().mockResolvedValue({ ok: true, reservationId: "res-1" });
   mocks.consume.mockReset();
   mocks.refund.mockReset();
@@ -169,5 +175,23 @@ describe("POST /api/generate", () => {
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toContain("hunter2");
     expect(mocks.refund).toHaveBeenCalledOnce();
+  });
+
+  it("explains a missing database schema instead of crashing (503)", async () => {
+    mocks.dbError = { code: "PGRST205", message: "Could not find the table 'public.projects' in the schema cache" };
+    const res = await call(validBody);
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error.code).toBe("backend_missing_schema");
+    expect(body.error.message).toMatch(/database isn't set up/);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it("turns credit-reservation database failures into a clear 503", async () => {
+    mocks.reserve.mockRejectedValue(new BackendError("invalid_service_key", "reserve credits"));
+    const res = await call(validBody);
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("backend_invalid_service_key");
+    expect(mocks.generate).not.toHaveBeenCalled();
   });
 });

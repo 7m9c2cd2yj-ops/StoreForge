@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, type SessionUser } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/env";
 import { isServiceRoleConfigured } from "@/lib/env.server";
+import { BACKEND_ISSUE_COPY, BackendError } from "@/lib/backend-errors";
 
 export type ApiErrorBody = { error: { code: string; message: string } };
 
@@ -31,4 +32,24 @@ export async function readJson(request: Request): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Wraps a route handler so database setup problems become a clear 503 JSON
+ * error (e.g. "Your database isn't set up yet") instead of an opaque 500.
+ */
+export function withBackendErrors<Args extends unknown[]>(
+  handler: (...args: Args) => Promise<Response>,
+): (...args: Args) => Promise<Response> {
+  return async (...args: Args) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      if (error instanceof BackendError) {
+        const copy = BACKEND_ISSUE_COPY[error.issue];
+        return apiError(503, `backend_${error.issue}`, `${copy.title}. ${copy.summary}`);
+      }
+      throw error;
+    }
+  };
 }

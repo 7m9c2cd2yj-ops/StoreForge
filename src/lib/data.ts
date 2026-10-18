@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEntitlements } from "@/lib/billing/entitlements";
 import { getUsageSummary } from "@/lib/credits";
 import type { ProjectStatus } from "@/lib/database.types";
+import { throwDbError } from "@/lib/backend-errors";
 
 export type ProjectSummary = {
   id: string;
@@ -31,6 +32,6 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     .from("projects")
     .select("id, store_name, niche, status, created_at, updated_at")
     .order("created_at", { ascending: false });
-  if (error) throw new Error("Could not load projects");
+  if (error) throwDbError("load projects", error);
   return data ?? [];
 }

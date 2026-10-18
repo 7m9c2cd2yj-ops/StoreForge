@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlan, type Plan } from "@/lib/config/plans";
 import { resolveEffectivePlan, type EffectivePlan } from "@/lib/billing/plan-resolution";
+import { throwDbError } from "@/lib/backend-errors";
 
 export type Entitlements = EffectivePlan & { plan: Plan };
 
@@ -18,9 +19,7 @@ export async function getEntitlements(userId: string): Promise<Entitlements> {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) {
-    throw new Error("Could not load subscription");
-  }
+  if (error) throwDbError("load subscription", error);
 
   const effective = resolveEffectivePlan(data);
   return { ...effective, plan: getPlan(effective.planId) };
