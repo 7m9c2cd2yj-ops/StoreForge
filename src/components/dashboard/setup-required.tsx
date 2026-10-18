@@ -1,5 +1,6 @@
 import { Settings2 } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
+import { supabaseConfigProblem } from "@/lib/env";
 
 const VARS = [
   { name: "NEXT_PUBLIC_SUPABASE_URL", desc: "Your Supabase project URL" },
@@ -9,6 +10,7 @@ const VARS = [
 
 /** Shown instead of the dashboard when required backend configuration is missing. */
 export function SetupRequired() {
+  const problem = supabaseConfigProblem() ?? "SUPABASE_SERVICE_ROLE_KEY is not set.";
   return (
     <div className="flex min-h-dvh flex-col bg-page-glow">
       <header className="mx-auto flex h-16 w-full max-w-6xl items-center px-4 sm:px-6">
@@ -23,6 +25,9 @@ export function SetupRequired() {
           <p className="mt-2 text-fg-muted">
             The dashboard needs a Supabase project for authentication and data storage. Add these environment
             variables, apply the database migration, and restart the server:
+          </p>
+          <p className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-4 py-3 text-sm text-amber-100" role="alert">
+            {problem}
           </p>
           <ul className="mt-6 space-y-3">
             {VARS.map((v) => (

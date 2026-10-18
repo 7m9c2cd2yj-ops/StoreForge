@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Alert } from "@/components/ui/misc";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isSupabaseConfigured, supabaseConfigProblem } from "@/lib/env";
 
 export function AuthCard({
   title,
@@ -20,8 +20,7 @@ export function AuthCard({
         {description && <p className="mt-1.5 text-sm text-fg-muted">{description}</p>}
         {!isSupabaseConfigured() && (
           <Alert variant="warning" title="Authentication isn't configured" className="mt-6">
-            Set <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-            <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to enable sign-in. See the README.
+            {supabaseConfigProblem()} See the README for setup steps.
           </Alert>
         )}
         <div className="mt-6">{children}</div>

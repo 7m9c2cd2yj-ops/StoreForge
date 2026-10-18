@@ -31,8 +31,13 @@ export async function proxy(request: NextRequest) {
   });
 
   // Validates the JWT with Supabase Auth and refreshes it when needed.
-  const { data } = await supabase.auth.getClaims();
-  const isSignedIn = Boolean(data?.claims?.sub);
+  let isSignedIn = false;
+  try {
+    const { data } = await supabase.auth.getClaims();
+    isSignedIn = Boolean(data?.claims?.sub);
+  } catch {
+    // Pages still enforce auth themselves; never fail the whole request here.
+  }
   const { pathname, search } = request.nextUrl;
 
   if (!isSignedIn && PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

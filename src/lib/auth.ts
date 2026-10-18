@@ -16,13 +16,19 @@ export type SessionUser = {
  */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (!isSupabaseConfigured()) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims?.sub) return null;
-  return {
-    id: data.claims.sub,
-    email: typeof data.claims.email === "string" ? data.claims.email : null,
-  };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getClaims();
+    if (error || !data?.claims?.sub) return null;
+    return {
+      id: data.claims.sub,
+      email: typeof data.claims.email === "string" ? data.claims.email : null,
+    };
+  } catch (error) {
+    // An auth outage or misconfiguration must not take down public pages.
+    console.error("[auth] session check failed", error instanceof Error ? error.message : error);
+    return null;
+  }
 });
 
 /** For pages: redirects to the login page when there is no session. */

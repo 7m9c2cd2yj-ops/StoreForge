@@ -1,22 +1,23 @@
 import "server-only";
+import { cleanEnvValue } from "@/lib/env";
 
 /**
  * Server-only secrets. Importing this module from a Client Component fails the
  * build (via `server-only`), so these values can never reach the browser.
  */
 export const serverEnv = {
-  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  supabaseServiceRoleKey: cleanEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY),
 
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  aiModel: process.env.AI_MODEL || "claude-opus-5-5",
+  anthropicApiKey: cleanEnvValue(process.env.ANTHROPIC_API_KEY),
+  aiModel: cleanEnvValue(process.env.AI_MODEL) || "claude-opus-5-5",
   aiStoreEffort: parseEffort(process.env.AI_STORE_EFFORT, "medium"),
   aiToolEffort: parseEffort(process.env.AI_TOOL_EFFORT, "low"),
   aiRefusalFallback: process.env.AI_REFUSAL_FALLBACK !== "off",
 
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-  stripePricePro: process.env.STRIPE_PRICE_PRO ?? "",
-  stripePriceBusiness: process.env.STRIPE_PRICE_BUSINESS ?? "",
+  stripeSecretKey: cleanEnvValue(process.env.STRIPE_SECRET_KEY),
+  stripeWebhookSecret: cleanEnvValue(process.env.STRIPE_WEBHOOK_SECRET),
+  stripePricePro: cleanEnvValue(process.env.STRIPE_PRICE_PRO),
+  stripePriceBusiness: cleanEnvValue(process.env.STRIPE_PRICE_BUSINESS),
 };
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
